@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PackageOpen } from "lucide-react";
+import { seedSamples } from "@/app/app/actions";
 
 export function EmptyState() {
   return (
@@ -12,9 +13,16 @@ export function EmptyState() {
         Drop in a purchase and we&apos;ll track its return window, warranty, and
         roll it into your monthly spending.
       </p>
-      <Link href="/app/purchases/new" className="btn-primary mt-6">
-        Add your first purchase
-      </Link>
+      <div className="mt-6 flex items-center gap-3">
+        <Link href="/app/purchases/new" className="btn-primary">
+          Add your first purchase
+        </Link>
+        <form action={seedSamples}>
+          <button type="submit" className="btn-secondary">
+            Load 5 sample items
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
