@@ -12,6 +12,18 @@ export function PurchaseForm({ categories }: { categories: Category[] }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [orderDate, setOrderDate] = useState(todayISO());
+  const [returnDeadline, setReturnDeadline] = useState(() => addDaysISO(todayISO(), 30));
+  const [warrantyEnd, setWarrantyEnd] = useState(() => addDaysISO(todayISO(), 365));
+
+  function onOrderDateChange(next: string) {
+    setOrderDate(next);
+    if (!next) return;
+    // Re-anchor both deadlines to the new order date. Users can still edit
+    // either field afterward; if they then change order_date again the
+    // defaults will reset, which is the expected "templated" behavior.
+    setReturnDeadline(addDaysISO(next, 30));
+    setWarrantyEnd(addDaysISO(next, 365));
+  }
 
   async function onSubmit(formData: FormData) {
     setSubmitting(true);
@@ -39,7 +51,7 @@ export function PurchaseForm({ categories }: { categories: Category[] }) {
             type="date"
             required
             value={orderDate}
-            onChange={(e) => setOrderDate(e.target.value)}
+            onChange={(e) => onOrderDateChange(e.target.value)}
           />
           <div className="grid grid-cols-2 gap-3">
             <Field label="Price" name="price" required placeholder="249.00" inputMode="decimal" />
@@ -70,14 +82,16 @@ export function PurchaseForm({ categories }: { categories: Category[] }) {
             label="Return deadline"
             name="return_deadline"
             type="date"
-            defaultValue={addDaysISO(orderDate, 30)}
+            value={returnDeadline}
+            onChange={(e) => setReturnDeadline(e.target.value)}
             help="Defaults to 30 days from order date."
           />
           <Field
             label="Warranty end"
             name="warranty_end"
             type="date"
-            defaultValue={addDaysISO(orderDate, 365)}
+            value={warrantyEnd}
+            onChange={(e) => setWarrantyEnd(e.target.value)}
             help="Defaults to 1 year from order date."
           />
           <div>

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { StatCard } from "@/components/StatCard";
 import { DeadlineChip } from "@/components/DeadlineChip";
 import { EmptyState } from "@/components/EmptyState";
-import { daysUntil, fmtDate, todayISO } from "@/lib/dates";
+import { addDaysISO, daysUntil, fmtDate, todayISO } from "@/lib/dates";
 import { formatCents } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +22,8 @@ type Purchase = {
 export default async function DashboardPage() {
   const supabase = createClient();
   const today = todayISO();
+  const returnsHorizon = addDaysISO(today, 14);
+  const warrantyHorizon = addDaysISO(today, 30);
 
   const [{ count: total }, { data: returns }, { data: warranties }, { data: monthRows }] =
     await Promise.all([
@@ -30,12 +32,14 @@ export default async function DashboardPage() {
         .from("purchases")
         .select("id, item_name, merchant, order_date, price_cents, currency, return_deadline, warranty_end")
         .gte("return_deadline", today)
+        .lte("return_deadline", returnsHorizon)
         .order("return_deadline", { ascending: true })
         .limit(5),
       supabase
         .from("purchases")
         .select("id, item_name, merchant, order_date, price_cents, currency, return_deadline, warranty_end")
         .gte("warranty_end", today)
+        .lte("warranty_end", warrantyHorizon)
         .order("warranty_end", { ascending: true })
         .limit(5),
       supabase
