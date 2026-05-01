@@ -71,7 +71,7 @@ function emailHTML(b: Body) {
         <div style="margin-top:8px;font-size:13px"><strong>${formatCents(b.priceCents, b.currency)}</strong></div>
         <div style="margin-top:8px;font-size:13px;color:#6366F1">${action} ${fmtDate(b.deadlineISO)}</div>
       </div>
-      <a href="${b.appUrl}/app" style="display:inline-block;background:#6366F1;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;font-size:14px;font-weight:500">Open Purchase Ping</a>
+      <a href="${escapeHtml(b.appUrl)}/app" style="display:inline-block;background:#6366F1;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;font-size:14px;font-weight:500">Open Purchase Ping</a>
     </td></tr>
   </table>
 </body></html>`;

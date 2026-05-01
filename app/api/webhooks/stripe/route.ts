@@ -28,9 +28,23 @@ export async function POST(req: Request) {
   if (!sig) return NextResponse.json({ error: "missing signature" }, { status: 400 });
 
   const raw = await req.text();
+
+  // Construct the client outside the try so a misconfigured STRIPE_SECRET_KEY
+  // surfaces as a 500 instead of being mislabelled as a 400 signature failure
+  // (which could cause Stripe to back off retries).
+  let client: ReturnType<typeof stripe>;
+  try {
+    client = stripe();
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : String(e) },
+      { status: 500 },
+    );
+  }
+
   let event: Stripe.Event;
   try {
-    event = stripe().webhooks.constructEvent(raw, sig, secret);
+    event = client.webhooks.constructEvent(raw, sig, secret);
   } catch (e) {
     return NextResponse.json(
       { error: `signature verification failed: ${e instanceof Error ? e.message : String(e)}` },
