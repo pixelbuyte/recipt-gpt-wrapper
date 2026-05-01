@@ -43,19 +43,23 @@ export async function POST(req: Request) {
   // Idempotency: skip if we've recorded this event before. The unique
   // constraint on stripe_event_id makes this safe under retries even if
   // two pods process the event simultaneously — only one INSERT succeeds.
-  const { data: existing } = await admin
+  const dedup = await admin
     .from("billing_events")
     .select("id")
     .eq("stripe_event_id", event.id)
     .maybeSingle();
-  if (existing) return NextResponse.json({ received: true, dedup: true });
+  if (dedup.error) {
+    return NextResponse.json({ error: dedup.error.message }, { status: 500 });
+  }
+  if (dedup.data) return NextResponse.json({ received: true, dedup: true });
 
   if (!RELEVANT.has(event.type)) {
-    await admin.from("billing_events").insert({
+    const { error } = await admin.from("billing_events").insert({
       stripe_event_id: event.id,
       type: event.type,
       payload: event as unknown as Record<string, unknown>,
     });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ received: true });
   }
 
@@ -68,11 +72,17 @@ export async function POST(req: Request) {
     );
   }
 
-  await admin.from("billing_events").insert({
+  // Only record AFTER handleEvent succeeds. If the insert here fails Stripe
+  // will retry the event; on retry the dedup SELECT misses and handleEvent
+  // runs again. The profile updates inside handleEvent are idempotent.
+  const { error: logErr } = await admin.from("billing_events").insert({
     stripe_event_id: event.id,
     type: event.type,
     payload: event as unknown as Record<string, unknown>,
   });
+  if (logErr) {
+    return NextResponse.json({ error: logErr.message }, { status: 500 });
+  }
 
   return NextResponse.json({ received: true });
 }
@@ -90,10 +100,11 @@ async function handleEvent(admin: Admin, event: Stripe.Event) {
     const customerId =
       typeof session.customer === "string" ? session.customer : session.customer?.id ?? null;
     if (userId && customerId) {
-      await admin
+      const { error } = await admin
         .from("profiles")
         .update({ stripe_customer_id: customerId, plan: "pro" })
         .eq("id", userId);
+      if (error) throw new Error(`profiles update failed: ${error.message}`);
     }
     return;
   }
@@ -112,13 +123,14 @@ async function handleEvent(admin: Admin, event: Stripe.Event) {
       ? new Date(sub.current_period_end * 1000).toISOString()
       : null;
 
-    await admin
+    const { error } = await admin
       .from("profiles")
       .update({
         plan: isActive ? "pro" : "free",
         plan_renews_at: isActive ? renewsAt : null,
       })
       .eq("stripe_customer_id", customerId);
+    if (error) throw new Error(`profiles update failed: ${error.message}`);
     return;
   }
 
