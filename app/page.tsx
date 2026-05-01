@@ -83,7 +83,11 @@ export default function LandingPage() {
       </section>
 
       <footer className="border-t border-border py-8 text-center text-xs text-muted">
-        © {new Date().getFullYear()} Purchase Ping
+        <div className="flex items-center justify-center gap-4">
+          <Link href="/privacy" className="hover:text-ink">Privacy</Link>
+          <Link href="/terms" className="hover:text-ink">Terms</Link>
+        </div>
+        <div className="mt-2">© {new Date().getFullYear()} Purchase Ping</div>
       </footer>
     </main>
   );

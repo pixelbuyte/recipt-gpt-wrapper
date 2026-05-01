@@ -2,18 +2,52 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { PurchaseTable } from "@/components/PurchaseTable";
+import { FiltersBar } from "@/components/FiltersBar";
 
 export const dynamic = "force-dynamic";
 
-export default async function PurchasesPage() {
+type Search = {
+  q?: string;
+  cat?: string;
+  from?: string;
+  to?: string;
+};
+
+export default async function PurchasesPage({ searchParams }: { searchParams: Search }) {
   const supabase = createClient();
-  const { data } = await supabase
+
+  const { data: cats } = await supabase
+    .from("categories")
+    .select("id, name")
+    .order("name");
+
+  let query = supabase
     .from("purchases")
     .select(
       "id, item_name, merchant, order_date, price_cents, currency, return_deadline, warranty_end, receipt_path, category:categories(name, color)",
     )
     .order("order_date", { ascending: false })
     .limit(100);
+
+  const q = searchParams.q?.trim();
+  if (q) {
+    // Escape commas/parens so they don't break PostgREST `or` syntax.
+    const safe = q.replace(/[,()]/g, " ");
+    query = query.or(
+      `item_name.ilike.%${safe}%,merchant.ilike.%${safe}%,notes.ilike.%${safe}%`,
+    );
+  }
+  if (searchParams.cat) {
+    query = query.eq("category_id", searchParams.cat);
+  }
+  if (searchParams.from) {
+    query = query.gte("order_date", searchParams.from);
+  }
+  if (searchParams.to) {
+    query = query.lte("order_date", searchParams.to);
+  }
+
+  const { data } = await query;
 
   const paths = (data ?? [])
     .map((r: { receipt_path: string | null }) => r.receipt_path)
@@ -23,7 +57,7 @@ export default async function PurchasesPage() {
   if (paths.length > 0) {
     const { data: signed } = await supabase.storage
       .from("receipts")
-      .createSignedUrls(paths, 60 * 60); // 1-hour TTL
+      .createSignedUrls(paths, 60 * 60);
     for (const s of signed ?? []) {
       if (s.path && s.signedUrl) signedByPath.set(s.path, s.signedUrl);
     }
@@ -48,6 +82,7 @@ export default async function PurchasesPage() {
           <Plus className="h-4 w-4" /> Add Purchase
         </Link>
       </div>
+      <FiltersBar categories={cats ?? []} />
       <PurchaseTable rows={rows} />
     </>
   );
