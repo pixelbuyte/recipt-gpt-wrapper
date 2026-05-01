@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { PurchaseTable } from "@/components/PurchaseTable";
 import { FiltersBar } from "@/components/FiltersBar";
@@ -11,6 +11,7 @@ type Search = {
   cat?: string;
   from?: string;
   to?: string;
+  imported?: string;
 };
 
 export default async function PurchasesPage({ searchParams }: { searchParams: Search }) {
@@ -78,14 +79,28 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Se
     receipt_url: r.receipt_path ? signedByPath.get(r.receipt_path) ?? null : null,
   }));
 
+  const importedCount = Number(searchParams.imported);
+  const showImportedToast =
+    Number.isFinite(importedCount) && importedCount > 0;
+
   return (
     <>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">Purchases</h1>
-        <Link href="/app/purchases/new" className="btn-primary">
-          <Plus className="h-4 w-4" /> Add Purchase
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/app/purchases/import" className="btn-secondary">
+            <Upload className="h-4 w-4" /> Import CSV
+          </Link>
+          <Link href="/app/purchases/new" className="btn-primary">
+            <Plus className="h-4 w-4" /> Add Purchase
+          </Link>
+        </div>
       </div>
+      {showImportedToast ? (
+        <div className="mb-4 rounded-card border border-accent/30 bg-accent-50 px-4 py-3 text-sm text-accent">
+          Imported {importedCount} {importedCount === 1 ? "purchase" : "purchases"}.
+        </div>
+      ) : null}
       <FiltersBar categories={cats ?? []} />
       <PurchaseTable rows={rows} />
     </>
