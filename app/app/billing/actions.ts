@@ -22,23 +22,34 @@ export async function startCheckout(formData: FormData) {
   if (!priceId) throw new Error("Stripe price ID not configured.");
 
   const admin = createAdminClient();
-  const { data: profile } = await admin
+  const { data: profile, error: readErr } = await admin
     .from("profiles")
     .select("email, stripe_customer_id")
     .eq("id", user.id)
     .single();
+  if (readErr) throw new Error(`profile read failed: ${readErr.message}`);
 
   let customerId = profile?.stripe_customer_id ?? null;
   if (!customerId) {
-    const customer = await stripe().customers.create({
-      email: profile?.email ?? user.email ?? undefined,
-      metadata: { supabase_user_id: user.id },
-    });
-    customerId = customer.id;
-    await admin
+    // Idempotency key keyed on the supabase user id collapses concurrent
+    // calls onto the same Stripe customer. Without it two near-simultaneous
+    // checkouts would each create a customer and orphan one of them.
+    const customer = await stripe().customers.create(
+      {
+        email: profile?.email ?? user.email ?? undefined,
+        metadata: { supabase_user_id: user.id },
+      },
+      { idempotencyKey: `customer:create:${user.id}` },
+    );
+
+    const { error: updErr } = await admin
       .from("profiles")
-      .update({ stripe_customer_id: customerId })
+      .update({ stripe_customer_id: customer.id })
       .eq("id", user.id);
+    if (updErr) {
+      throw new Error(`profile update failed: ${updErr.message}`);
+    }
+    customerId = customer.id;
   }
 
   const session = await stripe().checkout.sessions.create({
