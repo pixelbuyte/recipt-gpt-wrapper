@@ -11,22 +11,28 @@ export function FiltersBar({ categories }: { categories: Category[] }) {
   const [, startTransition] = useTransition();
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [q, setQ] = useState(params.get("q") ?? "");
   const cat = params.get("cat") ?? "";
   const from = params.get("from") ?? "";
   const to = params.get("to") ?? "";
 
-  // Debounce search updates so we're not pushing a URL on every keystroke.
+  // Debounce: read the live URL at flush time (not the closure's snapshot of
+  // params), so a sibling action like clear() that just rewrote the URL
+  // can't be undone by a stale pending timeout.
   useEffect(() => {
-    const t = setTimeout(() => {
-      const next = new URLSearchParams(params.toString());
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const next = new URLSearchParams(window.location.search);
       if (q) next.set("q", q);
       else next.delete("q");
-      if (next.toString() !== params.toString()) {
+      if (next.toString() !== window.location.search.replace(/^\?/, "")) {
         startTransition(() => router.replace(`?${next.toString()}`));
       }
     }, 250);
-    return () => clearTimeout(t);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
@@ -54,6 +60,10 @@ export function FiltersBar({ categories }: { categories: Category[] }) {
   }
 
   function clear() {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
     setQ("");
     startTransition(() => router.replace(`?`));
   }
