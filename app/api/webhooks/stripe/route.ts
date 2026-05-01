@@ -78,7 +78,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    await handleEvent(admin, event);
+    await handleEvent(admin, client, event);
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : String(e) },
@@ -102,8 +102,9 @@ export async function POST(req: Request) {
 }
 
 type Admin = ReturnType<typeof createAdminClient>;
+type StripeClient = ReturnType<typeof stripe>;
 
-async function handleEvent(admin: Admin, event: Stripe.Event) {
+async function handleEvent(admin: Admin, client: StripeClient, event: Stripe.Event) {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
     const userId =
@@ -130,18 +131,29 @@ async function handleEvent(admin: Admin, event: Stripe.Event) {
   ) {
     const sub = event.data.object as Stripe.Subscription;
     const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
-    const isActive =
-      event.type !== "customer.subscription.deleted" &&
-      ["active", "trialing", "past_due"].includes(sub.status);
-    const renewsAt = sub.current_period_end
-      ? new Date(sub.current_period_end * 1000).toISOString()
+
+    // Source of truth is the customer's live subscriptions in Stripe, not the
+    // event payload. This makes the handler order-insensitive: a stale
+    // `subscription.deleted` retry that arrives after a new subscription has
+    // been created won't downgrade the user, because the live list still
+    // shows an active subscription.
+    const subs = await client.subscriptions.list({
+      customer: customerId,
+      status: "all",
+      limit: 10,
+    });
+    const liveActive = subs.data.find((s) =>
+      ["active", "trialing", "past_due"].includes(s.status),
+    );
+    const renewsAt = liveActive?.current_period_end
+      ? new Date(liveActive.current_period_end * 1000).toISOString()
       : null;
 
     const { error } = await admin
       .from("profiles")
       .update({
-        plan: isActive ? "pro" : "free",
-        plan_renews_at: isActive ? renewsAt : null,
+        plan: liveActive ? "pro" : "free",
+        plan_renews_at: liveActive ? renewsAt : null,
       })
       .eq("stripe_customer_id", customerId);
     if (error) throw new Error(`profiles update failed: ${error.message}`);
