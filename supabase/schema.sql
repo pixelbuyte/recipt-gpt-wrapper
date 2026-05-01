@@ -118,20 +118,28 @@ language plpgsql
 security definer set search_path = public
 as $$
 begin
-  -- Only clear unsent reminders so we never resurrect an already-sent row.
-  -- If a row for this kind has sent_at set, the ON CONFLICT clause below
-  -- preserves it instead of resending.
+  -- Clear only unsent rows. For an already-sent row whose deadline is
+  -- being changed, the ON CONFLICT branch below re-arms it (resets
+  -- sent_at and updates send_at) so the user gets a reminder for the
+  -- new deadline. The trigger only fires when a deadline column
+  -- actually changes, so unrelated edits won't re-arm anything.
   delete from reminders
     where purchase_id = new.id and sent_at is null;
   if new.return_deadline is not null and new.return_deadline > current_date then
     insert into reminders (purchase_id, user_id, kind, send_at)
     values (new.id, new.user_id, 'return', new.return_deadline - interval '3 days')
-    on conflict (purchase_id, kind) do nothing;
+    on conflict (purchase_id, kind) do update
+      set send_at = excluded.send_at,
+          sent_at = null
+      where reminders.send_at is distinct from excluded.send_at;
   end if;
   if new.warranty_end is not null and new.warranty_end > current_date then
     insert into reminders (purchase_id, user_id, kind, send_at)
     values (new.id, new.user_id, 'warranty', new.warranty_end - interval '14 days')
-    on conflict (purchase_id, kind) do nothing;
+    on conflict (purchase_id, kind) do update
+      set send_at = excluded.send_at,
+          sent_at = null
+      where reminders.send_at is distinct from excluded.send_at;
   end if;
   return new;
 end;
@@ -161,9 +169,23 @@ alter table reminders enable row level security;
 -- so the anon/authenticated roles cannot read or write Stripe payloads.
 alter table billing_events enable row level security;
 
+-- Authenticated users can read and update only their own profile row.
+-- INSERT is handled by the SECURITY DEFINER handle_new_user trigger;
+-- DELETE is handled by the cascade from auth.users.
 drop policy if exists "self profile" on profiles;
-create policy "self profile" on profiles
-  for all using (id = auth.uid()) with check (id = auth.uid());
+drop policy if exists "profiles select self" on profiles;
+drop policy if exists "profiles update self" on profiles;
+create policy "profiles select self" on profiles
+  for select using (id = auth.uid());
+create policy "profiles update self" on profiles
+  for update using (id = auth.uid()) with check (id = auth.uid());
+
+-- Billing columns must only be writable by the service role (Stripe webhook).
+-- RLS row-checks alone can't restrict columns, so we revoke column-level
+-- UPDATE on the billing fields from anon and authenticated. The service
+-- role bypasses RLS and column grants entirely.
+revoke update (stripe_customer_id, plan, plan_renews_at)
+  on profiles from anon, authenticated;
 
 drop policy if exists "own purchases" on purchases;
 create policy "own purchases" on purchases
