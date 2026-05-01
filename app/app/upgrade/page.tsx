@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { startCheckout } from "@/app/app/billing/actions";
 
 export default function UpgradePage({
   searchParams,
@@ -20,25 +21,59 @@ export default function UpgradePage({
         </p>
       )}
 
-      <div className="mt-8 card p-6">
-        <div className="text-sm text-muted">Pro</div>
-        <div className="mt-1 text-3xl font-semibold">
-          $9<span className="text-base text-muted">/month</span>
-        </div>
-        <ul className="mt-4 space-y-2 text-sm">
-          <li>• Unlimited purchases</li>
-          <li>• Email reminders 3 days before return windows close</li>
-          <li>• Warranty expiration alerts</li>
-          <li>• CSV export</li>
-        </ul>
-        <button className="btn-primary mt-6 w-full" disabled title="Stripe checkout wired up on Day 2">
-          Stripe checkout — Day 2
-        </button>
+      <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2">
+        <PlanCard cadence="monthly" price="$9" cadenceLabel="per month" />
+        <PlanCard
+          cadence="yearly"
+          price="$79"
+          cadenceLabel="per year"
+          highlight="Save 26%"
+        />
       </div>
+
+      <ul className="mt-8 space-y-2 text-sm text-muted">
+        <li>• Unlimited purchases</li>
+        <li>• Email reminders 3 days before return windows close</li>
+        <li>• Warranty expiration alerts</li>
+        <li>• CSV export</li>
+      </ul>
 
       <Link href="/app" className="mt-6 inline-block text-sm text-muted hover:text-ink">
         ← Back to dashboard
       </Link>
     </div>
+  );
+}
+
+function PlanCard({
+  cadence,
+  price,
+  cadenceLabel,
+  highlight,
+}: {
+  cadence: "monthly" | "yearly";
+  price: string;
+  cadenceLabel: string;
+  highlight?: string;
+}) {
+  return (
+    <form action={startCheckout} className="card flex flex-col p-6">
+      <input type="hidden" name="cadence" value={cadence} />
+      <div className="flex items-center justify-between text-sm text-muted">
+        <span className="capitalize">{cadence}</span>
+        {highlight ? (
+          <span className="rounded-full bg-accent-50 px-2 py-0.5 text-xs font-medium text-accent">
+            {highlight}
+          </span>
+        ) : null}
+      </div>
+      <div className="mt-2 flex items-baseline gap-1">
+        <span className="text-3xl font-semibold tracking-tight">{price}</span>
+        <span className="text-sm text-muted">{cadenceLabel}</span>
+      </div>
+      <button type="submit" className="btn-primary mt-6">
+        Start checkout
+      </button>
+    </form>
   );
 }
