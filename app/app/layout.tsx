@@ -16,13 +16,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .single();
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen flex-col md:flex-row">
       <Sidebar
         email={profile?.email ?? user.email ?? ""}
         plan={(profile?.plan as "free" | "pro") ?? "free"}
       />
       <main className="flex-1 overflow-x-hidden">
-        <div className="mx-auto max-w-[1200px] px-8 py-8">{children}</div>
+        <div className="mx-auto max-w-[1200px] px-4 py-6 md:px-8 md:py-8">{children}</div>
       </main>
     </div>
   );
