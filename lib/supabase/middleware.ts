@@ -35,13 +35,10 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && (path === "/login" || path === "/")) {
-    // logged-in users hitting login go to dashboard; landing stays accessible.
-    if (path === "/login") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/app";
-      return NextResponse.redirect(url);
-    }
+  if (user && path === "/login") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/app";
+    return NextResponse.redirect(url);
   }
 
   return response;

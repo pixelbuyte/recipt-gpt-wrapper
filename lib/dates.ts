@@ -11,7 +11,14 @@ export function fmtDate(dateISO: string | null | undefined): string {
 }
 
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  // Use local Y/M/D so the client returns the user's local "today" instead
+  // of UTC (which can be off by one in negative offsets during evening).
+  // On the server (Vercel runs UTC) this still produces a stable threshold.
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 // Operates purely on the YYYY-MM-DD parts in UTC so the result is independent

@@ -57,7 +57,6 @@ export async function createPurchase(formData: FormData) {
     warranty_end: s(formData.get("warranty_end")),
     notes: s(formData.get("notes")),
     receipt_path: null as string | null,
-    receipt_url: null as string | null,
   };
 
   const receipt = formData.get("receipt") as File | null;
@@ -72,10 +71,8 @@ export async function createPurchase(formData: FormData) {
       .upload(path, receipt, { contentType: receipt.type, upsert: false });
     if (upErr) throw new Error(`Upload failed: ${upErr.message}`);
     insert.receipt_path = path;
-    const { data: signed } = await supabase.storage
-      .from("receipts")
-      .createSignedUrl(path, 60 * 60 * 24 * 365);
-    insert.receipt_url = signed?.signedUrl ?? null;
+    // Don't persist a signed URL — it would expire. Sign on demand at
+    // render time using receipt_path.
   }
 
   const { error } = await supabase.from("purchases").insert(insert);
