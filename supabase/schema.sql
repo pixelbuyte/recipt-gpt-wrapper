@@ -118,14 +118,20 @@ language plpgsql
 security definer set search_path = public
 as $$
 begin
-  delete from reminders where purchase_id = new.id;
+  -- Only clear unsent reminders so we never resurrect an already-sent row.
+  -- If a row for this kind has sent_at set, the ON CONFLICT clause below
+  -- preserves it instead of resending.
+  delete from reminders
+    where purchase_id = new.id and sent_at is null;
   if new.return_deadline is not null and new.return_deadline > current_date then
     insert into reminders (purchase_id, user_id, kind, send_at)
-    values (new.id, new.user_id, 'return', new.return_deadline - interval '3 days');
+    values (new.id, new.user_id, 'return', new.return_deadline - interval '3 days')
+    on conflict (purchase_id, kind) do nothing;
   end if;
   if new.warranty_end is not null and new.warranty_end > current_date then
     insert into reminders (purchase_id, user_id, kind, send_at)
-    values (new.id, new.user_id, 'warranty', new.warranty_end - interval '14 days');
+    values (new.id, new.user_id, 'warranty', new.warranty_end - interval '14 days')
+    on conflict (purchase_id, kind) do nothing;
   end if;
   return new;
 end;
