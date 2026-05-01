@@ -126,8 +126,11 @@ NEXT_PUBLIC_STRIPE_PRICE_ID_YEARLY  = <from 2a>
 RESEND_API_KEY                    = <from 3>
 RESEND_FROM_EMAIL                 = "Purchase Ping <reminders@mail.purchaseping.com>"
 CRON_SECRET                       = <generate: `openssl rand -hex 32`>
+ANTHROPIC_API_KEY                 = <optional — enables Pro AI receipt scan>
 NEXT_PUBLIC_APP_URL               = <leave blank, fill after first deploy>
 ```
+
+`ANTHROPIC_API_KEY` is optional. When set, Pro users see a **Scan with AI** button on the Add Purchase form that uses Claude vision to pre-fill merchant, item, price, and date from an uploaded receipt. Cost is roughly **$0.01 per scan** on Opus 4.7 — well under the Pro margin even at heavy usage. To disable, leave the variable unset.
 
 ### 4c. First deploy
 

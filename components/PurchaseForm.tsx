@@ -1,19 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Sparkles } from "lucide-react";
 import { createPurchase } from "@/app/app/purchases/actions";
 import { addDaysISO, todayISO } from "@/lib/dates";
 
 type Category = { id: string; name: string };
+type Currency = "USD" | "EUR" | "GBP" | "CAD" | "AUD";
 
-export function PurchaseForm({ categories }: { categories: Category[] }) {
+const CURRENCIES: Currency[] = ["USD", "EUR", "GBP", "CAD", "AUD"];
+
+export function PurchaseForm({
+  categories,
+  ocrEnabled,
+}: {
+  categories: Category[];
+  ocrEnabled: boolean;
+}) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [itemName, setItemName] = useState("");
+  const [merchant, setMerchant] = useState("");
+  const [price, setPrice] = useState("");
+  const [currency, setCurrency] = useState<Currency>("USD");
   const [orderDate, setOrderDate] = useState(todayISO());
   const [returnDeadline, setReturnDeadline] = useState(() => addDaysISO(todayISO(), 30));
   const [warrantyEnd, setWarrantyEnd] = useState(() => addDaysISO(todayISO(), 365));
+
+  const [hasReceipt, setHasReceipt] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanFilled, setScanFilled] = useState(false);
+  const receiptRef = useRef<HTMLInputElement | null>(null);
 
   function onOrderDateChange(next: string) {
     setOrderDate(next);
@@ -23,6 +44,57 @@ export function PurchaseForm({ categories }: { categories: Category[] }) {
     // defaults will reset, which is the expected "templated" behavior.
     setReturnDeadline(addDaysISO(next, 30));
     setWarrantyEnd(addDaysISO(next, 365));
+  }
+
+  async function onScan() {
+    const file = receiptRef.current?.files?.[0];
+    if (!file) return;
+    setScanning(true);
+    setScanError(null);
+    setScanFilled(false);
+    try {
+      const fd = new FormData();
+      fd.append("receipt", file);
+      const res = await fetch("/api/ocr", { method: "POST", body: fd });
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(body?.error ?? `Scan failed (${res.status})`);
+      }
+      // Only overwrite fields the model returned non-null for; preserve any
+      // values the user already typed in. Track whether anything actually
+      // landed so we can show "couldn't read this receipt" instead of a
+      // misleading success message when all fields come back null.
+      let filled = 0;
+      if (body.item_name) {
+        setItemName(body.item_name);
+        filled++;
+      }
+      if (body.merchant) {
+        setMerchant(body.merchant);
+        filled++;
+      }
+      if (typeof body.price === "number") {
+        setPrice(body.price.toFixed(2));
+        filled++;
+      }
+      if (body.currency && CURRENCIES.includes(body.currency)) {
+        setCurrency(body.currency as Currency);
+        filled++;
+      }
+      if (body.order_date && /^\d{4}-\d{2}-\d{2}$/.test(body.order_date)) {
+        onOrderDateChange(body.order_date);
+        filled++;
+      }
+      if (filled > 0) {
+        setScanFilled(true);
+      } else {
+        setScanError("Couldn't read this receipt — try a clearer image or fill the fields manually.");
+      }
+    } catch (e) {
+      setScanError(e instanceof Error ? e.message : "Scan failed");
+    } finally {
+      setScanning(false);
+    }
   }
 
   async function onSubmit(formData: FormData) {
@@ -43,8 +115,21 @@ export function PurchaseForm({ categories }: { categories: Category[] }) {
     <form action={onSubmit} className="space-y-6">
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <div className="space-y-4">
-          <Field label="Item name" name="item_name" required placeholder="AirPods Pro" />
-          <Field label="Merchant" name="merchant" placeholder="Apple" />
+          <Field
+            label="Item name"
+            name="item_name"
+            required
+            placeholder="AirPods Pro"
+            value={itemName}
+            onChange={(e) => setItemName(e.target.value)}
+          />
+          <Field
+            label="Merchant"
+            name="merchant"
+            placeholder="Apple"
+            value={merchant}
+            onChange={(e) => setMerchant(e.target.value)}
+          />
           <Field
             label="Order date"
             name="order_date"
@@ -54,15 +139,27 @@ export function PurchaseForm({ categories }: { categories: Category[] }) {
             onChange={(e) => onOrderDateChange(e.target.value)}
           />
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Price" name="price" required placeholder="249.00" inputMode="decimal" />
+            <Field
+              label="Price"
+              name="price"
+              required
+              placeholder="249.00"
+              inputMode="decimal"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+            />
             <div>
               <label className="label" htmlFor="currency">Currency</label>
-              <select id="currency" name="currency" defaultValue="USD" className="input">
-                <option>USD</option>
-                <option>EUR</option>
-                <option>GBP</option>
-                <option>CAD</option>
-                <option>AUD</option>
+              <select
+                id="currency"
+                name="currency"
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value as Currency)}
+                className="input"
+              >
+                {CURRENCIES.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -105,15 +202,39 @@ export function PurchaseForm({ categories }: { categories: Category[] }) {
             />
           </div>
           <div>
-            <label className="label" htmlFor="receipt">Receipt (optional)</label>
+            <div className="flex items-center justify-between">
+              <label className="label mb-0" htmlFor="receipt">Receipt (optional)</label>
+              {ocrEnabled && hasReceipt ? (
+                <button
+                  type="button"
+                  onClick={onScan}
+                  disabled={scanning}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-accent/30 bg-accent-50 px-2.5 py-1 text-xs font-medium text-accent hover:bg-indigo-100 disabled:opacity-50"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {scanning ? "Scanning…" : "Scan with AI"}
+                </button>
+              ) : null}
+            </div>
             <input
+              ref={receiptRef}
               id="receipt"
               name="receipt"
               type="file"
-              accept="image/png,image/jpeg,application/pdf"
-              className="block w-full text-sm text-muted file:mr-3 file:rounded-md file:border-0 file:bg-accent-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-accent hover:file:bg-indigo-100"
+              accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"
+              onChange={(e) => {
+                setHasReceipt(Boolean(e.target.files?.length));
+                setScanError(null);
+                setScanFilled(false);
+              }}
+              className="mt-1.5 block w-full text-sm text-muted file:mr-3 file:rounded-md file:border-0 file:bg-accent-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-accent hover:file:bg-indigo-100"
             />
-            <p className="mt-1 text-xs text-muted">PNG, JPG, or PDF up to 10MB.</p>
+            <p className="mt-1 text-xs text-muted">PNG, JPG, WEBP, GIF, or PDF up to 10MB.</p>
+            {scanError ? (
+              <p className="mt-2 text-xs text-red-600">{scanError}</p>
+            ) : scanFilled ? (
+              <p className="mt-2 text-xs text-accent">Filled from receipt — review before saving.</p>
+            ) : null}
           </div>
         </div>
       </div>
