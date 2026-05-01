@@ -39,9 +39,15 @@ create table if not exists categories (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references profiles(id) on delete cascade, -- null = system default
   name text not null,
-  color text not null default '#6366f1',
-  unique (user_id, name)
+  color text not null default '#6366f1'
 );
+
+-- Partial unique indexes: NULL user_id (system rows) needs its own index
+-- because Postgres treats NULLs as distinct in standard unique constraints.
+create unique index if not exists categories_user_name_uniq
+  on categories (user_id, name) where user_id is not null;
+create unique index if not exists categories_system_name_uniq
+  on categories (name) where user_id is null;
 
 insert into categories (user_id, name, color) values
   (null,'Electronics','#6366f1'),
@@ -107,7 +113,10 @@ create index if not exists reminders_due_idx
 
 -- Auto-create reminder rows when a purchase is inserted/updated
 create or replace function public.sync_reminders()
-returns trigger language plpgsql as $$
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
 begin
   delete from reminders where purchase_id = new.id;
   if new.return_deadline is not null and new.return_deadline > current_date then
@@ -142,6 +151,9 @@ alter table profiles enable row level security;
 alter table purchases enable row level security;
 alter table categories enable row level security;
 alter table reminders enable row level security;
+-- billing_events is service-role only: enable RLS and add no policies
+-- so the anon/authenticated roles cannot read or write Stripe payloads.
+alter table billing_events enable row level security;
 
 drop policy if exists "self profile" on profiles;
 create policy "self profile" on profiles
