@@ -26,7 +26,15 @@ export default async function DashboardPage() {
   const today = todayISO();
   const returnsHorizon = addDaysISO(today, 14);
   const warrantyHorizon = addDaysISO(today, 30);
-  const sixMonthsAgo = addDaysISO(today.slice(0, 7) + "-01", -150);
+  // First day of the oldest month shown on the 6-month bar chart. Pegging
+  // this to a real month boundary avoids the off-by-a-few-days drift you'd
+  // get from `addDaysISO(today, -150)`, which silently drops purchases from
+  // the early days of the oldest month.
+  const [yStr, mStr] = today.split("-");
+  const chartStartYear = Number(yStr);
+  const chartStartMonth = Number(mStr) - 5;
+  const chartStartDate = new Date(Date.UTC(chartStartYear, chartStartMonth - 1, 1));
+  const chartStart = `${chartStartDate.getUTCFullYear()}-${String(chartStartDate.getUTCMonth() + 1).padStart(2, "0")}-01`;
 
   const [
     { count: total },
@@ -57,7 +65,7 @@ export default async function DashboardPage() {
     supabase
       .from("purchases")
       .select("price_cents, order_date, category:categories(name, color)")
-      .gte("order_date", sixMonthsAgo),
+      .gte("order_date", chartStart),
   ]);
 
   const monthSpend = (monthRows ?? []).reduce(

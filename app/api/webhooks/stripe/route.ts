@@ -6,12 +6,16 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Events that mutate profile state. Anything not in this set still gets
+// logged into billing_events for auditing but skips handleEvent.
+// invoice.payment_succeeded is intentionally not here — the corresponding
+// customer.subscription.updated event already carries the plan state we
+// need, so handling it twice would just be duplicate work.
 const RELEVANT = new Set([
   "checkout.session.completed",
   "customer.subscription.created",
   "customer.subscription.updated",
   "customer.subscription.deleted",
-  "invoice.payment_succeeded",
   "invoice.payment_failed",
 ]);
 
