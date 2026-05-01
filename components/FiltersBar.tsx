@@ -53,7 +53,15 @@ export function FiltersBar({ categories }: { categories: Category[] }) {
   }, []);
 
   function setParam(name: string, value: string) {
-    const next = new URLSearchParams(params.toString());
+    // Flush any pending search debounce so the user's in-progress typing
+    // doesn't get lost when they change another filter.
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    const next = new URLSearchParams(window.location.search);
+    if (q) next.set("q", q);
+    else next.delete("q");
     if (value) next.set(name, value);
     else next.delete(name);
     startTransition(() => router.replace(`?${next.toString()}`));

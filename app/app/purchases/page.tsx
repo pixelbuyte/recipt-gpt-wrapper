@@ -31,10 +31,14 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Se
 
   const q = searchParams.q?.trim();
   if (q) {
-    // Escape commas/parens so they don't break PostgREST `or` syntax.
-    const safe = q.replace(/[,()]/g, " ");
+    // Wrap in PostgREST's quoted-string syntax to neutralise reserved
+    // characters in user input (`. , ( ) :` etc.). Inside the quotes only
+    // the closing quote and backslash need stripping. Use `*` as the ilike
+    // wildcard — that's PostgREST's syntax in raw `.or()` filters.
+    const safe = q.replace(/["\\]/g, " ");
+    const pattern = `*${safe}*`;
     query = query.or(
-      `item_name.ilike.%${safe}%,merchant.ilike.%${safe}%,notes.ilike.%${safe}%`,
+      `item_name.ilike."${pattern}",merchant.ilike."${pattern}",notes.ilike."${pattern}"`,
     );
   }
   if (searchParams.cat) {
