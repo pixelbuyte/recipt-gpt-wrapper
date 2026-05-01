@@ -15,7 +15,7 @@ const ReceiptSchema = z.object({
   merchant: z.string().nullable(),
   item_name: z.string().nullable(),
   price: z.number().nullable(),
-  currency: z.enum(["USD", "EUR", "GBP", "CAD", "AUD"]),
+  currency: z.enum(["USD", "EUR", "GBP", "CAD", "AUD"]).nullable(),
   order_date: z.string().nullable(),
 });
 
@@ -24,7 +24,7 @@ const SYSTEM = [
   "Return null for any field you can't read confidently — do not guess.",
   "Item name: the most prominent purchased item, or a short summary if multiple line items.",
   "Price: the total in major units (e.g. 24.99 not 2499). Numbers only.",
-  "Currency: 3-letter ISO code; default USD when unclear.",
+  "Currency: 3-letter ISO code if visible on the receipt; null if you can't tell.",
   "Order date: ISO 8601 (YYYY-MM-DD).",
 ].join(" ");
 
