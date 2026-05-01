@@ -61,15 +61,35 @@ export function PurchaseForm({
         throw new Error(body?.error ?? `Scan failed (${res.status})`);
       }
       // Only overwrite fields the model returned non-null for; preserve any
-      // values the user already typed in.
-      if (body.item_name) setItemName(body.item_name);
-      if (body.merchant) setMerchant(body.merchant);
-      if (typeof body.price === "number") setPrice(body.price.toFixed(2));
+      // values the user already typed in. Track whether anything actually
+      // landed so we can show "couldn't read this receipt" instead of a
+      // misleading success message when all fields come back null.
+      let filled = 0;
+      if (body.item_name) {
+        setItemName(body.item_name);
+        filled++;
+      }
+      if (body.merchant) {
+        setMerchant(body.merchant);
+        filled++;
+      }
+      if (typeof body.price === "number") {
+        setPrice(body.price.toFixed(2));
+        filled++;
+      }
       if (body.currency && CURRENCIES.includes(body.currency)) {
         setCurrency(body.currency as Currency);
+        filled++;
       }
-      if (body.order_date) onOrderDateChange(body.order_date);
-      setScanFilled(true);
+      if (body.order_date) {
+        onOrderDateChange(body.order_date);
+        filled++;
+      }
+      if (filled > 0) {
+        setScanFilled(true);
+      } else {
+        setScanError("Couldn't read this receipt — try a clearer image or fill the fields manually.");
+      }
     } catch (e) {
       setScanError(e instanceof Error ? e.message : "Scan failed");
     } finally {
