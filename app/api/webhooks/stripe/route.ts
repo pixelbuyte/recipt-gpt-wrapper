@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendChurnSaverEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -157,6 +158,36 @@ async function handleEvent(admin: Admin, client: StripeClient, event: Stripe.Eve
       })
       .eq("stripe_customer_id", customerId);
     if (error) throw new Error(`profiles update failed: ${error.message}`);
+
+    // Churn-saver: detect the transition from "not pending cancel" to "pending
+    // cancel" — that's when Stripe's customer portal flips
+    // cancel_at_period_end true. Fire one email at that moment with a "we
+    // kept your data, come back" message and a link to the portal.
+    // event.data.previous_attributes is only present on .updated events.
+    if (event.type === "customer.subscription.updated") {
+      const prev = (event.data.previous_attributes ?? {}) as Partial<Stripe.Subscription>;
+      const justCancelled =
+        prev.cancel_at_period_end === false && sub.cancel_at_period_end === true;
+      if (justCancelled && sub.current_period_end) {
+        const { data: profile } = await admin
+          .from("profiles")
+          .select("email")
+          .eq("stripe_customer_id", customerId)
+          .single();
+        if (profile?.email) {
+          try {
+            await sendChurnSaverEmail({
+              to: profile.email,
+              endsISO: new Date(sub.current_period_end * 1000).toISOString(),
+              appUrl: process.env.NEXT_PUBLIC_APP_URL ?? "https://purchaseping.com",
+            });
+          } catch {
+            // Email is best-effort. Don't fail the webhook (and force a
+            // Stripe retry that would re-fire the email) over a Resend hiccup.
+          }
+        }
+      }
+    }
     return;
   }
 

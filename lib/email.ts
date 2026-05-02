@@ -77,6 +77,48 @@ function emailHTML(b: Body) {
 </body></html>`;
 }
 
+export type ChurnSaverEmail = {
+  to: string;
+  endsISO: string;
+  appUrl: string;
+};
+
+export async function sendChurnSaverEmail(input: ChurnSaverEmail) {
+  const from =
+    process.env.RESEND_FROM_EMAIL ?? "Purchase Ping <reminders@purchaseping.com>";
+  const subject = `Your Pro plan ends ${fmtDate(input.endsISO)}`;
+
+  const text = [
+    "Sorry to see you go.",
+    "",
+    `Your Pro plan ends on ${fmtDate(input.endsISO)}. Until then everything keeps working — you'll get reminders, the AI scan, and unlimited purchases.`,
+    "",
+    "After that, your account drops to the free 10-purchase view. Your data stays — nothing is deleted. You can resubscribe any time and pick up exactly where you left off.",
+    "",
+    `Manage billing: ${input.appUrl}/app/settings`,
+    "",
+    "If something specifically didn't work for you, reply to this email — we read every one.",
+  ].join("\n");
+
+  const html = `<!doctype html><html><body style="font-family:Inter,system-ui,sans-serif;background:#f7f7f8;padding:24px;color:#0B0B0F">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto;background:#fff;border:1px solid #E5E7EB;border-radius:12px;padding:24px">
+    <tr><td>
+      <h1 style="margin:0 0 8px;font-size:18px">Sorry to see you go.</h1>
+      <p style="margin:0 0 16px;color:#6B7280;font-size:14px">Your Pro plan ends on <strong style="color:#0B0B0F">${fmtDate(input.endsISO)}</strong>.</p>
+      <div style="border:1px solid #E5E7EB;border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;line-height:1.55">
+        Until then everything keeps working — reminders, AI receipt scan, unlimited purchases.
+        <br /><br />
+        After that, your account drops to the free 10-purchase view. <strong>Your data stays</strong> — nothing is deleted. Resubscribe any time and pick up where you left off.
+      </div>
+      <a href="${escapeHtml(input.appUrl)}/app/settings" style="display:inline-block;background:#6366F1;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;font-size:14px;font-weight:500">Manage billing</a>
+      <p style="margin:24px 0 0;color:#6B7280;font-size:13px">If something specifically didn't work, just reply to this email — we read every one.</p>
+    </td></tr>
+  </table>
+</body></html>`;
+
+  return client().emails.send({ from, to: input.to, subject, html, text });
+}
+
 function escapeHtml(s: string) {
   return s
     .replace(/&/g, "&amp;")
