@@ -34,8 +34,8 @@ export async function updateSession(request: NextRequest) {
     const { data } = await supabase.auth.getUser();
     user = data.user;
   } catch {
-    // Supabase network error — pass through rather than 500-ing every request.
-    return response;
+    // Supabase network error — user stays null, fall through so /app routes
+    // still redirect to /login rather than passing unauthenticated requests.
   }
 
   const path = request.nextUrl.pathname;
