@@ -5,9 +5,15 @@ export async function updateSession(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // If env vars aren't configured yet (e.g. preview deploys before env is wired up),
-  // pass the request through rather than crashing every route.
+  // If env vars aren't configured or aren't a valid URL, pass through rather
+  // than crashing every route (e.g. Vercel preview before env is wired up, or
+  // a placeholder value like the literal string "undefined").
   if (!supabaseUrl || !supabaseAnonKey) {
+    return NextResponse.next({ request });
+  }
+  try {
+    new URL(supabaseUrl);
+  } catch {
     return NextResponse.next({ request });
   }
 
